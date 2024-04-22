@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/gjermundgaraba/solo-machine-go/relayer/cosmoschain"
 	"github.com/gjermundgaraba/solo-machine-go/solomachine"
+	"github.com/gjermundgaraba/solo-machine-go/utils"
 	"go.uber.org/zap"
 )
 
@@ -16,17 +17,25 @@ type Relayer struct {
 }
 
 func NewRelayer(cmdCtx context.Context, logger *zap.Logger, config *Config, homedir string) *Relayer {
-	solo := solomachine.NewSoloMachine(logger)
-
-	cosmos := cosmoschain.NewCosmosChain(
+	clientCtx, err := utils.SetupClientContext(
 		cmdCtx,
-		logger,
 		homedir,
 		config.CosmosChain.AccountPrefix,
 		config.CosmosChain.KeyringBackend,
 		config.CosmosChain.Key,
 		config.CosmosChain.RPCAddr,
-		config.CosmosChain.ChainID,
+		config.CosmosChain.ChainID)
+	if err != nil {
+		logger.Error("Error setting up client context", zap.Error(err))
+		panic(err)
+	}
+
+	solo := solomachine.NewSoloMachine(logger, homedir)
+
+	cosmos := cosmoschain.NewCosmosChain(
+		clientCtx,
+		logger,
+		homedir,
 		config.CosmosChain.GasAdjustment,
 		config.CosmosChain.GasPrices,
 		config.CosmosChain.Gas,

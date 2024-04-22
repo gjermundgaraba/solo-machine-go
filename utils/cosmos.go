@@ -1,7 +1,8 @@
-package cosmoschain
+package utils
 
 import (
 	"context"
+	comettypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -9,17 +10,37 @@ import (
 	"github.com/cosmos/cosmos-sdk/std"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
-	"github.com/cosmos/cosmos-sdk/x/auth/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	ibcclienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	ibcconnectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v8/modules/core/23-commitment/types"
+	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
 	solomachineclient "github.com/cosmos/ibc-go/v8/modules/light-clients/06-solomachine"
 	tmclient "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
-
 	"os"
 )
 
-func setupClientContext(
+type TendermintIBCHeader struct {
+	SignedHeader      *comettypes.SignedHeader
+	ValidatorSet      *comettypes.ValidatorSet
+	TrustedValidators *comettypes.ValidatorSet
+	TrustedHeight     clienttypes.Height
+}
+
+func (h TendermintIBCHeader) Height() uint64 {
+	return uint64(h.SignedHeader.Height)
+}
+
+func (h TendermintIBCHeader) ConsensusState() ibcexported.ConsensusState {
+	return &tmclient.ConsensusState{
+		Timestamp:          h.SignedHeader.Time,
+		Root:               commitmenttypes.NewMerkleRoot(h.SignedHeader.AppHash),
+		NextValidatorsHash: h.SignedHeader.NextValidatorsHash,
+	}
+}
+
+func SetupClientContext(
 	cmdCtx context.Context,
 	homedir string,
 	accountPrefix string,
@@ -75,7 +96,7 @@ func setupClientContext(
 		WithInterfaceRegistry(interfaceRegistry).
 		WithTxConfig(txCfg).
 		WithInput(os.Stdin).
-		WithAccountRetriever(types.AccountRetriever{}).
+		WithAccountRetriever(authtypes.AccountRetriever{}).
 		WithHomeDir(homedir).
 		WithChainID(chainID).
 		WithKeyring(kr).

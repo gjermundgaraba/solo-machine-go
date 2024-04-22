@@ -1,6 +1,7 @@
 package relayer
 
 import (
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	"go.uber.org/zap"
 )
 
@@ -18,17 +19,36 @@ func (r *Relayer) CreateSoloMachineLightClientOnCosmos() error {
 	clientID, err := r.cosmosChain.CreateClient(clientState, consensusState)
 	r.logger.Info("Client on CosmosChain created successfully", zap.String("client-id", clientID))
 
-	// Caller should save config back to disk probably
 	r.config.CosmosChain.SoloMachineLightClient.IBCClientID = clientID
-
-	return nil
-}
-
-func (r *Relayer) CreateTendermintLightClientOnSoloMachine() error {
-	clientState, consensusState, err := r.cosmosChain.GetCreateClientInfo()
+	err = WriteConfigToFile(r.config, "", true)
 	if err != nil {
 		return err
 	}
 
-	return r.soloMachine.CreateCometLightClient(clientState, consensusState)
+	r.logger.Info("Config updated with light client ID created on the cosmos chain", zap.String("client-id", r.config.CosmosChain.SoloMachineLightClient.IBCClientID))
+
+	return nil
+}
+
+func (r *Relayer) SoloMachineLightClientExistsOnCosmos() (bool, error) {
+	clientID := r.config.CosmosChain.SoloMachineLightClient.IBCClientID
+	return r.cosmosChain.ClientExists(clientID)
+}
+
+func (r *Relayer) CreateTendermintLightClientOnSoloMachine() error {
+	clientState, ibcHeader, err := r.cosmosChain.GetCreateClientInfo()
+	if err != nil {
+		return err
+	}
+
+	msg, err := clienttypes.NewMsgCreateClient(clientState, ibcHeader.ConsensusState(), "")
+	if err != nil {
+		return err
+	}
+
+	return r.soloMachine.CreateTendermintLightClient(msg, ibcHeader)
+}
+
+func (r *Relayer) TendermintLightClientExistsOnSoloMachine() (bool, error) {
+	return r.soloMachine.LightClientExists()
 }

@@ -15,6 +15,7 @@ import (
 const (
 	// Persistent Flags
 	flagVerbose = "verbose"
+	flagForce   = "force"
 
 	contextKeyLogger  = "logger"
 	contextKeyConfig  = "config"

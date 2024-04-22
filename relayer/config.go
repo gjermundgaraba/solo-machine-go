@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	configPath  string            `yaml:"-"`
 	SoloMachine SoloMachineConfig `yaml:"solo-machine"`
 	CosmosChain CosmosChainConfig `yaml:"cosmos-chain"`
 }
@@ -80,13 +81,22 @@ func ReadConfigFromFile(logger *zap.Logger, path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	config.configPath = path
 
 	logger.Debug("Read config from file", zap.String("path", path), zap.Any("config", config))
 
 	return &config, nil
 }
 
+// If path is set to "", the config will be written to the path it was read from
 func WriteConfigToFile(config *Config, path string, force bool) error {
+	if path == "" {
+		path = config.configPath
+		if path == "" {
+			return fmt.Errorf("no path specified and config has no path")
+		}
+	}
+
 	if !force {
 		// Make sure there is no config file at the path
 		if _, err := os.Stat(path); err == nil {

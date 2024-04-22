@@ -48,6 +48,9 @@ func InitCmd() *cobra.Command {
 			}
 
 			force, err := cmd.Flags().GetBool("force")
+			if err != nil {
+				return err
+			}
 
 			homedir, err := cmd.Flags().GetString(flags.FlagHome)
 			if err != nil {
@@ -65,7 +68,7 @@ func InitCmd() *cobra.Command {
 	}
 
 	cmd.Flags().Bool("example", false, "init an example config instead of an empty one")
-	cmd.Flags().Bool("force", false, "forcefully overwrite, even if an existing one exists")
+	cmd.Flags().Bool(flagForce, false, "forcefully overwrite, even if an existing one exists")
 
 	return cmd
 }
