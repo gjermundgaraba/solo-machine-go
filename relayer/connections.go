@@ -1,11 +1,14 @@
 package relayer
 
-import "go.uber.org/zap"
+import (
+	"fmt"
+	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
+	"go.uber.org/zap"
+)
 
-func (r *Relayer) CreateConnections() error {
+func (r *Relayer) InitConnection() error {
 	tendermintClientID := r.soloMachine.TendermintClientID()
 
-	// TODO: Check if there is a connection already
 	connectionID, err := r.cosmosChain.InitConnection(
 		r.config.CosmosChain.SoloMachineLightClient.IBCClientID,
 		tendermintClientID,
@@ -14,12 +17,29 @@ func (r *Relayer) CreateConnections() error {
 		return err
 	}
 
-	// Caller needs to save the config to disk after this (I don't like this approach very much)
 	r.config.CosmosChain.SoloMachineLightClient.ConnectionID = connectionID
 	if err = WriteConfigToFile(r.config, "", true); err != nil {
 		return err
 	}
 	r.logger.Info("Config updated with connection ID created on the cosmos chain", zap.String("connection-id", r.config.CosmosChain.SoloMachineLightClient.ConnectionID))
+
+	return nil
+}
+
+func (r *Relayer) FinishAnyRemainingConnectionHandshakes() error {
+	connectionID := r.config.CosmosChain.SoloMachineLightClient.ConnectionID
+	tendermintClientID := r.soloMachine.TendermintClientID()
+
+	connection, err := r.cosmosChain.QueryConnection(connectionID)
+	if err != nil {
+		return err
+	}
+	if connection.State == connectiontypes.OPEN {
+		return nil // All good, connection is already open
+	}
+	if connection.State != connectiontypes.INIT {
+		return fmt.Errorf("unexpected connection state: wanted %s, got %s", connectiontypes.INIT, connection.State)
+	}
 
 	tendermintLightClientState, err := r.soloMachine.LightClientState()
 	if err != nil {

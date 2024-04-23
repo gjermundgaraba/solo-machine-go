@@ -7,8 +7,22 @@ import (
 	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
 )
 
-// TODO: Make this function check if the connection exists, and if it is not completed, complete it
-// Or make another function that does that part
+func (cc *CosmosChain) QueryConnection(
+	connectionID string,
+) (*connectiontypes.ConnectionEnd, error) {
+	queryClient := connectiontypes.NewQueryClient(cc.clientCtx)
+	req := &connectiontypes.QueryConnectionRequest{
+		ConnectionId: connectionID,
+	}
+
+	res, err := queryClient.Connection(cc.clientCtx.CmdContext, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Connection, nil
+}
+
 func (cc *CosmosChain) InitConnection(
 	clientID string,
 	counterPartyClientID string,
