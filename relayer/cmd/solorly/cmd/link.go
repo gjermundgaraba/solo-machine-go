@@ -39,7 +39,7 @@ func LinkCmd() *cobra.Command {
 				logger.Info("Skipping creation of tendermint light client on solo machine as it already exists")
 			}
 
-			if force || config.CosmosChain.SoloMachineLightClient.ConnectionID != "" {
+			if force || config.CosmosChain.SoloMachineLightClient.ConnectionID == "" {
 				if err := r.InitConnection(); err != nil {
 					return err
 				}
@@ -52,8 +52,18 @@ func LinkCmd() *cobra.Command {
 			}
 			logger.Info("Connections are ready")
 
-			// TODO: Create channel on cosmos
-			// TODO: Create channel on solo machine (?)
+			if force || config.CosmosChain.SoloMachineLightClient.ChannelID == "" {
+				if err := r.InitChannel(); err != nil {
+					return err
+				}
+			} else {
+				logger.Info("Skipping creation of channel on cosmos chain as we already have one configured", zap.String("channel-id", config.CosmosChain.SoloMachineLightClient.ChannelID))
+			}
+
+			if err := r.FinishAnyRemainingChannelHandshakes(); err != nil {
+				return err
+			}
+			logger.Info("Channels are ready")
 
 			return nil
 		},

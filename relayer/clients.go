@@ -6,7 +6,7 @@ import (
 )
 
 func (r *Relayer) CreateSoloMachineLightClientOnCosmos() error {
-	clientState, err := r.soloMachine.ClientState()
+	clientState, err := r.soloMachine.ClientState(1)
 	if err != nil {
 		return err
 	}
@@ -36,7 +36,7 @@ func (r *Relayer) SoloMachineLightClientExistsOnCosmos() (bool, error) {
 }
 
 func (r *Relayer) CreateTendermintLightClientOnSoloMachine() error {
-	clientState, ibcHeader, err := r.cosmosChain.GetCreateClientInfo()
+	clientState, ibcHeader, err := r.cosmosChain.GetClientInfo()
 	if err != nil {
 		return err
 	}
@@ -51,4 +51,31 @@ func (r *Relayer) CreateTendermintLightClientOnSoloMachine() error {
 
 func (r *Relayer) TendermintLightClientExistsOnSoloMachine() (bool, error) {
 	return r.soloMachine.LightClientExists()
+}
+
+func (r *Relayer) UpdateClients() error {
+	r.logger.Info("Updating clients...")
+	_, ibcHeader, err := r.cosmosChain.GetClientInfo()
+	if err != nil {
+		return err
+	}
+	if err := r.soloMachine.UpdateClient(ibcHeader); err != nil {
+		return err
+	}
+
+	clientState, err := r.cosmosChain.GetClientState(r.config.CosmosChain.SoloMachineLightClient.IBCClientID)
+	if err != nil {
+		return err
+	}
+
+	soloMachineHeader, err := r.soloMachine.CreateHeader(clientState.Sequence)
+	if err != nil {
+		return err
+	}
+	if err := r.cosmosChain.UpdateClient(r.config.CosmosChain.SoloMachineLightClient.IBCClientID, soloMachineHeader); err != nil {
+		return err
+	}
+
+	r.logger.Info("Clients updated successfully")
+	return nil
 }

@@ -67,11 +67,15 @@ func (cc *CosmosChain) sendTx(msgs ...sdk.Msg) (*sdk.TxResponse, error) {
 		return nil, fmt.Errorf(res.RawLog)
 	}
 
-	out, err := cc.clientCtx.Codec.MarshalJSON(res)
-	if err != nil {
+	if _, err = cc.clientCtx.Codec.MarshalJSON(res); err != nil {
 		return nil, err
 	}
-	cc.logger.Info("Successfully broadcast tx", zap.String("tx", string(out)))
+	var msgTypes []string
+	for _, msg := range msgs {
+		msgTypes = append(msgTypes, sdk.MsgTypeURL(msg))
+
+	}
+	cc.logger.Info("Successfully broadcast tx", zap.Strings("msgs", msgTypes))
 
 	return cc.waitForTX(res.TxHash)
 }

@@ -8,10 +8,12 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v8/modules/core/23-commitment/types"
 	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
+	solomachineclient "github.com/cosmos/ibc-go/v8/modules/light-clients/06-solomachine"
 	tmclient "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
-	"github.com/gjermundgaraba/solo-machine-go/utils"
+	"slices"
 	"time"
 )
 
@@ -29,12 +31,7 @@ func (cc *CosmosChain) ClientExists(clientID string) (bool, error) {
 }
 
 func (cc *CosmosChain) CreateClient(clientState ibcexported.ClientState, consensusState ibcexported.ConsensusState) (string, error) {
-	address, err := cc.getAddress()
-	if err != nil {
-		return "", err
-	}
-
-	msg, err := clienttypes.NewMsgCreateClient(clientState, consensusState, address)
+	msg, err := clienttypes.NewMsgCreateClient(clientState, consensusState, cc.clientCtx.From)
 	if err != nil {
 		return "", err
 	}
@@ -49,16 +46,20 @@ func (cc *CosmosChain) CreateClient(clientState ibcexported.ClientState, consens
 
 // Repurposed from cosmos relayer
 func parseClientIDFromEvents(events []abcitypes.Event) (string, error) {
-	return parseAttributeFromEvents(events, clienttypes.EventTypeCreateClient, clienttypes.AttributeKeyClientID)
+	return parseAttributeFromEvents(events, []string{clienttypes.EventTypeCreateClient}, clienttypes.AttributeKeyClientID)
 }
 
 func parseConnectionIDFromEvents(events []abcitypes.Event) (string, error) {
-	return parseAttributeFromEvents(events, connectiontypes.EventTypeConnectionOpenInit, connectiontypes.AttributeKeyConnectionID)
+	return parseAttributeFromEvents(events, []string{connectiontypes.EventTypeConnectionOpenInit, connectiontypes.EventTypeConnectionOpenTry}, connectiontypes.AttributeKeyConnectionID)
 }
 
-func parseAttributeFromEvents(events []abcitypes.Event, eventType string, attributeKey string) (string, error) {
+func parseChannelIDFromEvents(events []abcitypes.Event) (string, error) {
+	return parseAttributeFromEvents(events, []string{channeltypes.EventTypeChannelOpenInit, channeltypes.EventTypeChannelOpenTry}, channeltypes.AttributeKeyChannelID)
+}
+
+func parseAttributeFromEvents(events []abcitypes.Event, eventTypes []string, attributeKey string) (string, error) {
 	for _, event := range events {
-		if event.Type == eventType {
+		if slices.Contains(eventTypes, event.Type) {
 			for _, attr := range event.Attributes {
 				if attr.Key == attributeKey {
 					return attr.Value, nil
@@ -70,26 +71,26 @@ func parseAttributeFromEvents(events []abcitypes.Event, eventType string, attrib
 	return "", fmt.Errorf("attribute not found")
 }
 
-func (cc *CosmosChain) GetCreateClientInfo() (ibcexported.ClientState, utils.TendermintIBCHeader, error) {
+func (cc *CosmosChain) GetClientInfo() (ibcexported.ClientState, tmclient.Header, error) {
 	height, err := cc.getLatestHeight()
 	if err != nil {
-		return nil, utils.TendermintIBCHeader{}, err
+		return nil, tmclient.Header{}, err
 	}
 
 	ibcHeader, err := cc.getIBCHeader(height)
 	if err != nil {
-		return nil, utils.TendermintIBCHeader{}, err
+		return nil, tmclient.Header{}, err
 	}
 
 	clientState, err := cc.getClientState(ibcHeader)
 	if err != nil {
-		return nil, utils.TendermintIBCHeader{}, err
+		return nil, tmclient.Header{}, err
 	}
 
 	return clientState, ibcHeader, nil
 }
 
-func (cc *CosmosChain) getClientState(ibcHeader utils.TendermintIBCHeader) (ibcexported.ClientState, error) {
+func (cc *CosmosChain) getClientState(ibcHeader tmclient.Header) (ibcexported.ClientState, error) {
 	revisionNumber := clienttypes.ParseChainID(cc.clientCtx.ChainID)
 
 	unbondingPeriod, err := cc.getUnbondingPeriod()
@@ -106,7 +107,7 @@ func (cc *CosmosChain) getClientState(ibcHeader utils.TendermintIBCHeader) (ibce
 		FrozenHeight:    clienttypes.ZeroHeight(),
 		LatestHeight: clienttypes.Height{
 			RevisionNumber: revisionNumber,
-			RevisionHeight: ibcHeader.Height(),
+			RevisionHeight: uint64(ibcHeader.SignedHeader.Header.Height),
 		},
 		ProofSpecs:  commitmenttypes.GetSDKSpecs(),
 		UpgradePath: defaultUpgradePath,
@@ -123,24 +124,30 @@ func (cc *CosmosChain) getLatestHeight() (int64, error) {
 	return stat.SyncInfo.LatestBlockHeight, nil
 }
 
-func (cc *CosmosChain) getIBCHeader(height int64) (utils.TendermintIBCHeader, error) {
+func (cc *CosmosChain) getIBCHeader(height int64) (tmclient.Header, error) {
 	if height <= 0 {
-		return utils.TendermintIBCHeader{}, fmt.Errorf("height cannot be 0 or less")
+		return tmclient.Header{}, fmt.Errorf("height cannot be 0 or less")
 	}
 
 	provider, err := comethttp.New(cc.clientCtx.ChainID, cc.clientCtx.NodeURI)
 	if err != nil {
-		return utils.TendermintIBCHeader{}, err
+		return tmclient.Header{}, err
 	}
 
 	lightBlock, err := provider.LightBlock(cc.clientCtx.CmdContext, height)
 	if err != nil {
-		return utils.TendermintIBCHeader{}, err
+		return tmclient.Header{}, err
 	}
 
-	return utils.TendermintIBCHeader{
-		SignedHeader: lightBlock.SignedHeader,
-		ValidatorSet: lightBlock.ValidatorSet,
+	protoSignedHeader := lightBlock.SignedHeader.ToProto()
+	protoValidatorSet, err := lightBlock.ValidatorSet.ToProto()
+	if err != nil {
+		return tmclient.Header{}, err
+	}
+
+	return tmclient.Header{
+		SignedHeader: protoSignedHeader,
+		ValidatorSet: protoValidatorSet,
 	}, nil
 }
 
@@ -152,4 +159,34 @@ func (cc *CosmosChain) getUnbondingPeriod() (time.Duration, error) {
 	}
 
 	return res.Params.UnbondingTime, nil
+}
+
+func (cc *CosmosChain) UpdateClient(clientID string, clientMsg ibcexported.ClientMessage) error {
+	msg, err := clienttypes.NewMsgUpdateClient(clientID, clientMsg, cc.clientCtx.From)
+	if err != nil {
+		return err
+	}
+
+	_, err = cc.sendTx(msg)
+	return err
+}
+
+func (cc *CosmosChain) GetClientState(clientID string) (*solomachineclient.ClientState, error) {
+	queryClient := clienttypes.NewQueryClient(cc.clientCtx)
+	res, err := queryClient.ClientState(cc.clientCtx.CmdContext, &clienttypes.QueryClientStateRequest{ClientId: clientID})
+	if err != nil {
+		return nil, err
+	}
+
+	clientStateUnpacked, err := clienttypes.UnpackClientState(res.ClientState)
+	if err != nil {
+		return nil, err
+	}
+
+	clientState, ok := clientStateUnpacked.(*solomachineclient.ClientState)
+	if !ok {
+		return nil, fmt.Errorf("cannot convert %T into %T", clientStateUnpacked, clientState)
+	}
+
+	return clientState, nil
 }

@@ -5,6 +5,7 @@ import (
 	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v8/modules/core/23-commitment/types"
 	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
+	"go.uber.org/zap"
 )
 
 func (cc *CosmosChain) QueryConnection(
@@ -53,14 +54,23 @@ func (cc *CosmosChain) InitConnection(
 
 func (cc *CosmosChain) AckOpenConnection(
 	connectionID string,
-	counterpartyClientID string,
+	counterPartyConnectionID string,
 	counterpartyClient ibcexported.ClientState,
 	tryProof, clientProof, consensusProof []byte,
 	consensusHeight clienttypes.Height,
 ) error {
+	cc.logger.Debug("sending connection open ack",
+		zap.String("connection-id", connectionID),
+		zap.String("counterparty-connection-id", counterPartyConnectionID),
+		zap.String("counterparty-client", counterpartyClient.String()),
+		zap.String("consensus-height", consensusHeight.String()),
+		zap.String("version", connectiontypes.GetCompatibleVersions()[0].String()),
+		zap.String("from", cc.clientCtx.From),
+	)
+
 	ackMsg := connectiontypes.NewMsgConnectionOpenAck(
 		connectionID,
-		counterpartyClientID,
+		counterPartyConnectionID,
 		counterpartyClient,
 		tryProof,
 		clientProof,

@@ -1,7 +1,6 @@
 package cosmoschain
 
 import (
-	"errors"
 	"github.com/cosmos/cosmos-sdk/client"
 	"go.uber.org/zap"
 )
@@ -32,13 +31,4 @@ func NewCosmosChain(
 		gasPrices:     gasPrices,
 		gas:           gas,
 	}
-}
-
-func (cc *CosmosChain) getAddress() (string, error) {
-	address := cc.clientCtx.From
-	if address == "" {
-		return "", errors.New("cosmos chain address is empty in clientCtx")
-	}
-
-	return address, nil
 }

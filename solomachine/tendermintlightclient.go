@@ -7,14 +7,26 @@ import (
 	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
 	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
 	tmclient "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
-	"github.com/gjermundgaraba/solo-machine-go/utils"
 	"go.uber.org/zap"
 )
 
-const clientID = "07-tendermint-1"
+// TODO: Generate these dynamically
+const (
+	clientID     = "07-tendermint-1"
+	connectionID = "connection-0"
+	channelID    = "channel-0"
+)
 
 func (sm *SoloMachine) TendermintClientID() string {
 	return clientID
+}
+
+func (sm *SoloMachine) ConnectionID() string {
+	return connectionID
+}
+
+func (sm *SoloMachine) ChannelID() string {
+	return channelID
 }
 
 func (sm *SoloMachine) LightClientState() (*tmclient.ClientState, error) {
@@ -58,12 +70,11 @@ func (sm *SoloMachine) LightClientExists() (bool, error) {
 	return latestHeight.GetRevisionHeight() != 0, nil
 }
 
-func (sm *SoloMachine) CreateTendermintLightClient(msgCreateClient *clienttypes.MsgCreateClient, ibcHeader utils.TendermintIBCHeader) error {
+func (sm *SoloMachine) CreateTendermintLightClient(msgCreateClient *clienttypes.MsgCreateClient, ibcHeader tmclient.Header) error {
 	// TODO: Should we maybe not allow this if the client is already created?
-	header := *ibcHeader.SignedHeader.Header.ToProto()
-	ctx := sdk.NewContext(sm.store, header, false, sm.sdkLogger)
+	ctx := sdk.NewContext(sm.store, *ibcHeader.Header, false, sm.sdkLogger)
 
-	sm.logger.Debug("Creating tendermint light client", zap.Uint64("height", ibcHeader.Height()))
+	sm.logger.Debug("Creating tendermint light client", zap.Int64("height", ibcHeader.SignedHeader.Header.Height))
 
 	if err := sm.tmLightClient.Initialize(ctx, clientID, msgCreateClient.ClientState.Value, msgCreateClient.ConsensusState.Value); err != nil {
 		return err
@@ -71,8 +82,19 @@ func (sm *SoloMachine) CreateTendermintLightClient(msgCreateClient *clienttypes.
 
 	sm.logger.Debug("Initialized tendermint light client", zap.Any("client-id", clientID))
 
-	sm.store.Commit()
+	sm.store.GetCommitKVStore(sm.lightClientStoreKey).Commit()
 
 	sm.logger.Debug("store version", zap.Int64("version", sm.store.LatestVersion()))
+	return nil
+}
+
+func (sm *SoloMachine) UpdateClient(ibcHeader tmclient.Header) error {
+	ctx := sdk.NewContext(sm.store, *ibcHeader.Header, false, sm.sdkLogger)
+	sm.tmLightClient.UpdateState(ctx, clientID, &ibcHeader)
+
+	sm.store.GetCommitKVStore(sm.lightClientStoreKey).Commit()
+
+	sm.logger.Debug("updated tendermint light client", zap.Int64("ibc header height", ibcHeader.SignedHeader.Header.Height))
+
 	return nil
 }

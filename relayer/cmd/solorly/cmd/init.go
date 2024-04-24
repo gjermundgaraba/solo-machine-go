@@ -24,7 +24,7 @@ func InitCmd() *cobra.Command {
 				return err
 			}
 
-			var config *relayer.Config
+			config := &relayer.Config{}
 			if makeExampleConfig {
 				config = &relayer.Config{
 					SoloMachine: relayer.SoloMachineConfig{},

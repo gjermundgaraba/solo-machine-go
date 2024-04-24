@@ -112,6 +112,8 @@ func WriteConfigToFile(config *Config, path string, force bool) error {
 		}
 	}
 
+	config.configPath = path
+
 	file, err := yaml.Marshal(config)
 	if err != nil {
 		return err
