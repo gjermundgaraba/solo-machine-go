@@ -82,7 +82,7 @@ func (sm *SoloMachine) CreateTendermintLightClient(msgCreateClient *clienttypes.
 
 	sm.logger.Debug("Initialized tendermint light client", zap.Any("client-id", clientID))
 
-	sm.store.GetCommitKVStore(sm.lightClientStoreKey).Commit()
+	sm.store.Commit()
 
 	sm.logger.Debug("store version", zap.Int64("version", sm.store.LatestVersion()))
 	return nil
@@ -92,7 +92,7 @@ func (sm *SoloMachine) UpdateClient(ibcHeader tmclient.Header) error {
 	ctx := sdk.NewContext(sm.store, *ibcHeader.Header, false, sm.sdkLogger)
 	sm.tmLightClient.UpdateState(ctx, clientID, &ibcHeader)
 
-	sm.store.GetCommitKVStore(sm.lightClientStoreKey).Commit()
+	sm.store.Commit()
 
 	sm.logger.Debug("updated tendermint light client", zap.Int64("ibc header height", ibcHeader.SignedHeader.Header.Height))
 
