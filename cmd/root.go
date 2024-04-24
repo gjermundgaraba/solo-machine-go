@@ -24,7 +24,7 @@ const (
 
 func RootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "solorly",
+		Use:   "solo-machine",
 		Short: "TODO", // TODO
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Use == "init" {

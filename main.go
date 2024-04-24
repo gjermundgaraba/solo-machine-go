@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/gjermundgaraba/solo-machine-go/relayer/cmd/solorly/cmd"
+	"github.com/gjermundgaraba/solo-machine-go/cmd"
 	"github.com/gjermundgaraba/solo-machine-go/utils"
 	"go.uber.org/zap"
 )

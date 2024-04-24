@@ -11,7 +11,7 @@ import (
 func InitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize the relayer",
+		Short: "Initialize relayer configuration file",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verbose, err := cmd.Flags().GetBool(flagVerbose)
 			if err != nil {
