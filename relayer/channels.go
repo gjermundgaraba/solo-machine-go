@@ -1,84 +1,69 @@
 package relayer
 
 import (
-	"fmt"
 	transfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	"go.uber.org/zap"
 )
 
-func (r *Relayer) InitChannel() error {
-	if err := r.UpdateClients(); err != nil {
-		return err
+func (r *Relayer) QueryChannel(chainName string, portID string, channelID string) (*channeltypes.Channel, error) {
+	clientCtx := r.createClientCtx(chainName)
+	queryClient := channeltypes.NewQueryClient(clientCtx)
+	req := &channeltypes.QueryChannelRequest{
+		PortId:    portID,
+		ChannelId: channelID,
 	}
 
-	connectionID := r.config.CosmosChain.SoloMachineLightClient.ConnectionID
-
-	channelID, err := r.cosmosChain.InitICS20Channel(connectionID)
+	res, err := queryClient.Channel(clientCtx.CmdContext, req)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	return res.Channel, nil
+}
+
+func (r *Relayer) InitChannel(chainName string, connectionID string, portID string, version string, counterpartyPortID string) (string, error) {
+	clientCtx := r.createClientCtx(chainName)
+	txf := r.createTxFactory(clientCtx, chainName)
+
+	initMsg := channeltypes.NewMsgChannelOpenInit(
+		portID,
+		version,
+		channeltypes.UNORDERED,
+		[]string{connectionID},
+		counterpartyPortID,
+		clientCtx.From,
+	)
+	txResp, err := r.sendTx(clientCtx, txf, initMsg)
+	if err != nil {
+		return "", err
+	}
+
+	channelID, err := parseChannelIDFromEvents(txResp.Events)
+	if err != nil {
+		return "", err
 	}
 
 	r.logger.Info("Channel initialized on the cosmos chain", zap.String("channel-id", channelID))
 
-	r.config.CosmosChain.SoloMachineLightClient.ChannelID = channelID
-	if err = WriteConfigToFile(r.config, "", true); err != nil {
-		return err
-	}
-	r.logger.Info("Config updated with channel ID created on the cosmos chain", zap.String("channel-id", r.config.CosmosChain.SoloMachineLightClient.ChannelID))
-
-	return nil
+	return channelID, nil
 }
 
-func (r *Relayer) FinishAnyRemainingChannelHandshakes() error {
-	r.logger.Debug("Starting channel handshake")
-	if err := r.UpdateClients(); err != nil {
-		return err
-	}
+func (r *Relayer) ChannelOpenAck(chainName string, channelID string, counterpartyChannelID string, tryProof []byte, proofHeight clienttypes.Height) error {
+	clientCtx := r.createClientCtx(chainName)
+	txf := r.createTxFactory(clientCtx, chainName)
 
-	//connectionID := r.config.CosmosChain.SoloMachineLightClient.ConnectionID
-	channelID := r.config.CosmosChain.SoloMachineLightClient.ChannelID
-
-	channel, err := r.cosmosChain.QueryChannel(transfertypes.PortID, channelID)
-	if err != nil {
-		return err
-	}
-	if channel.State == channeltypes.OPEN {
-		r.logger.Debug("Channel already open", zap.String("channel-id", channelID))
-		return nil // All good, channel is already open
-	}
-	if channel.State != channeltypes.INIT {
-		return fmt.Errorf("unexpected channel state: wanted %s, got %s", channeltypes.INIT, channel.State)
-	}
-
-	r.logger.Debug("Channel is in INIT state, starting handshake", zap.String("channel-id", channelID))
-
-	clientState, err := r.cosmosChain.GetClientState(r.config.CosmosChain.SoloMachineLightClient.IBCClientID)
-	if err != nil {
-		return err
-	}
-
-	tryProof, err := r.soloMachine.GenerateChanOpenTryProof(
-		clientState.Sequence,
+	ackMsg := channeltypes.NewMsgChannelOpenAck(
 		transfertypes.PortID,
+		channelID,
+		counterpartyChannelID,
 		transfertypes.Version,
-		channelID)
-	if err != nil {
-		return err
-	}
+		tryProof,
+		proofHeight,
+		clientCtx.From,
+	)
 
-	tendermintLightClientState, err := r.soloMachine.LightClientState()
-	if err != nil {
-		return err
-	}
-
-	soloMachineChannelID := r.soloMachine.ChannelID()
-
-	if err := r.cosmosChain.AckOpenICS20Channel(channelID, soloMachineChannelID, tryProof, tendermintLightClientState.LatestHeight); err != nil {
-		return err
-	}
-
-	r.logger.Info("Channel handshake completed", zap.String("channel-id", channelID))
-
-	return nil
+	_, err := r.sendTx(clientCtx, txf, ackMsg)
+	return err
 }

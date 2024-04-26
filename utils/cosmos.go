@@ -1,14 +1,10 @@
 package utils
 
 import (
-	"context"
-	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/std"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	ibcclienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	ibcconnectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
@@ -18,26 +14,7 @@ import (
 	"os"
 )
 
-func SetupClientContext(
-	cmdCtx context.Context,
-	homedir string,
-	accountPrefix string,
-	keyringBackend string,
-	key string,
-	rpc string,
-	chainID string,
-) (client.Context, error) {
-	cfg := sdk.GetConfig()
-	accountPubKeyPrefix := accountPrefix + "pub"
-	validatorAddressPrefix := accountPrefix + "valoper"
-	validatorPubKeyPrefix := accountPrefix + "valoperpub"
-	consNodeAddressPrefix := accountPrefix + "valcons"
-	consNodePubKeyPrefix := accountPrefix + "valconspub"
-	cfg.SetBech32PrefixForAccount(accountPrefix, accountPubKeyPrefix)
-	cfg.SetBech32PrefixForValidator(validatorAddressPrefix, validatorPubKeyPrefix)
-	cfg.SetBech32PrefixForConsensusNode(consNodeAddressPrefix, consNodePubKeyPrefix)
-	cfg.Seal()
-
+func SetupCodec() codec.Codec {
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	authtypes.RegisterInterfaces(interfaceRegistry)
@@ -48,43 +25,9 @@ func SetupClientContext(
 	tmclient.RegisterInterfaces(interfaceRegistry)
 	cdc := codec.NewProtoCodec(interfaceRegistry)
 
-	kr, err := keyring.New("solorly", keyringBackend, homedir, os.Stdin, cdc)
-	if err != nil {
-		return client.Context{}, err
-	}
+	return cdc
+}
 
-	txCfg := tx.NewTxConfig(cdc, tx.DefaultSignModes)
-
-	from, err := kr.Key(key)
-	if err != nil {
-		return client.Context{}, err
-	}
-	fromAddr, err := from.GetAddress()
-	if err != nil {
-		return client.Context{}, err
-	}
-
-	rpcClient, err := client.NewClientFromNode(rpc)
-	if err != nil {
-		return client.Context{}, err
-	}
-
-	return client.Context{}.
-		WithCmdContext(cmdCtx).
-		WithCodec(cdc).
-		WithInterfaceRegistry(interfaceRegistry).
-		WithTxConfig(txCfg).
-		WithInput(os.Stdin).
-		WithAccountRetriever(authtypes.AccountRetriever{}).
-		WithHomeDir(homedir).
-		WithChainID(chainID).
-		WithKeyring(kr).
-		WithOffline(false).
-		WithNodeURI(rpc).
-		WithFromName(key).
-		WithFromAddress(fromAddr).
-		WithFrom(fromAddr.String()).
-		WithClient(rpcClient).
-		WithBroadcastMode("sync").
-		WithViper(""), nil
+func GetKeyring(keyringBackend string, homedir string, cdc codec.Codec) (keyring.Keyring, error) {
+	return keyring.New("solo-machine", keyringBackend, homedir, os.Stdin, cdc)
 }

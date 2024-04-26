@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/gjermundgaraba/solo-machine-go/relayer"
+	"github.com/gjermundgaraba/solo-machine-go/solomachine"
 	"github.com/gjermundgaraba/solo-machine-go/utils"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -11,64 +11,57 @@ import (
 func InitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize relayer configuration file",
+		Short: "Initialize everything (light clients, connections, channels) for all chains in the config file",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			verbose, err := cmd.Flags().GetBool(flagVerbose)
+			logger := getLogger(cmd)
+			homedir := getHomedir(cmd)
+			config := getConfig(cmd)
+			chainName := getChainName(cmd)
+			cdc := utils.SetupCodec()
+
+			r, err := relayer.NewRelayer(cmd.Context(), logger, cdc, config, homedir)
 			if err != nil {
 				return err
 			}
-			logger := utils.CreateLogger(verbose)
 
-			makeExampleConfig, err := cmd.Flags().GetBool("example")
-			if err != nil {
-				return err
-			}
-
-			config := &relayer.Config{}
-			if makeExampleConfig {
-				config = &relayer.Config{
-					SoloMachine: relayer.SoloMachineConfig{},
-					CosmosChain: relayer.CosmosChainConfig{
-						RPCAddr:        "http://0.0.0.0:26657",
-						AccountPrefix:  "gg",
-						ChainID:        "gg",
-						GasAdjustment:  1.5,
-						GasPrices:      "0.025stake",
-						Gas:            "auto",
-						KeyringBackend: "test",
-						Key:            "tt",
-						SoloMachineLightClient: relayer.SoloMachineLightClientConfig{
-							// No point in setting these up unless we also hardcode this into the gg chain
-							IBCClientID:  "",
-							ConnectionID: "",
-							ChannelID:    "",
-						},
-					},
+			sm := solomachine.NewSoloMachine(logger, cdc, r, homedir)
+			if !sm.CounterpartyLightClientExists(chainName) {
+				if err := sm.CreateCounterpartyLightClient(chainName); err != nil {
+					return err
+				}
+				logger.Info("Counterparty light client created", zap.String("chain", chainName))
+			} else {
+				logger.Info("Counterparty light client already exists", zap.String("chain", chainName))
+				if err := sm.UpdateCounterpartyLightClient(chainName); err != nil {
+					return err
 				}
 			}
 
-			force, err := cmd.Flags().GetBool("force")
-			if err != nil {
+			if !sm.LightClientExists(chainName) {
+				if err := sm.CreateLightClient(chainName); err != nil {
+					return err
+				}
+				logger.Info("Light client created", zap.String("chain", chainName))
+			} else {
+				logger.Info("Light client already exists", zap.String("chain", chainName))
+				if err := sm.UpdateLightClient(chainName); err != nil {
+					return err
+				}
+			}
+
+			// Connection and channel creation is safe to call multiple times as it checks if it exists and the states
+			// It will also continue if the handshake is started but not completed
+			if err := sm.CreateConnection(chainName); err != nil {
 				return err
 			}
 
-			homedir, err := cmd.Flags().GetString(flags.FlagHome)
-			if err != nil {
+			if err := sm.CreateICS20Channel(chainName); err != nil {
 				return err
 			}
-			configPath := getConfigPath(homedir)
-			if err := relayer.WriteConfigToFile(config, configPath, force); err != nil {
-				return err
-			}
-
-			logger.Info("Initialized relayer config file", zap.String("path", configPath))
 
 			return nil
 		},
 	}
-
-	cmd.Flags().Bool("example", false, "init an example config instead of an empty one")
-	cmd.Flags().Bool(flagForce, false, "forcefully overwrite, even if an existing one exists")
 
 	return cmd
 }

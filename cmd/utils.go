@@ -4,21 +4,35 @@ import (
 	"github.com/gjermundgaraba/solo-machine-go/relayer"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"path"
 )
 
-func getConfigPath(homedir string) string {
-	return path.Join(homedir, "config.yaml")
-}
-
 func getLogger(cmd *cobra.Command) *zap.Logger {
-	return cmd.Context().Value(contextKeyLogger).(*zap.Logger)
-}
+	logger := cmd.Context().Value(contextKeyLogger).(*zap.Logger)
+	if logger == nil {
+		panic("logger is nil")
+	}
 
-func getRelayerConfig(cmd *cobra.Command) *relayer.Config {
-	return cmd.Context().Value(contextKeyConfig).(*relayer.Config)
+	return logger
 }
 
 func getHomedir(cmd *cobra.Command) string {
-	return cmd.Context().Value(contextKeyHomedir).(string)
+	homedir := cmd.Context().Value(contextKeyHomedir).(string)
+	if homedir == "" {
+		panic("homedir is empty")
+	}
+
+	return homedir
+}
+
+func getConfig(cmd *cobra.Command) relayer.Config {
+	return cmd.Context().Value(contextKeyConfig).(relayer.Config)
+}
+
+func getChainName(cmd *cobra.Command) string {
+	chainName := cmd.Context().Value(contextKeyChainName).(string)
+	if chainName == "" {
+		panic("chain name is empty")
+	}
+
+	return chainName
 }

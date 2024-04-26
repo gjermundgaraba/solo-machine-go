@@ -1,97 +1,99 @@
 package relayer
 
 import (
-	"fmt"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v8/modules/core/23-commitment/types"
+	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
 	"go.uber.org/zap"
+	"time"
 )
 
-func (r *Relayer) InitConnection() error {
-	if err := r.UpdateClients(); err != nil {
-		return err
+func (r *Relayer) QueryConnection(chainName string, connectionID string) (*connectiontypes.ConnectionEnd, error) {
+	clientCtx := r.createClientCtx(chainName)
+	queryClient := connectiontypes.NewQueryClient(clientCtx)
+	req := &connectiontypes.QueryConnectionRequest{
+		ConnectionId: connectionID,
 	}
 
-	tendermintClientID := r.soloMachine.TendermintClientID()
-
-	connectionID, err := r.cosmosChain.InitConnection(
-		r.config.CosmosChain.SoloMachineLightClient.IBCClientID,
-		tendermintClientID,
-	)
+	res, err := queryClient.Connection(clientCtx.CmdContext, req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	r.logger.Info("Connection initialized on the cosmos chain", zap.String("connection-id", connectionID))
-
-	r.config.CosmosChain.SoloMachineLightClient.ConnectionID = connectionID
-	if err = WriteConfigToFile(r.config, "", true); err != nil {
-		return err
-	}
-	r.logger.Info("Config updated with connection ID created on the cosmos chain", zap.String("connection-id", r.config.CosmosChain.SoloMachineLightClient.ConnectionID))
-
-	return nil
+	return res.Connection, nil
 }
 
-func (r *Relayer) FinishAnyRemainingConnectionHandshakes() error {
-	if err := r.UpdateClients(); err != nil {
-		return err
-	}
+func (r *Relayer) InitConnection(chainName string, clientID string, counterpartyClientID string) (string, error) {
+	clientCtx := r.createClientCtx(chainName)
+	txf := r.createTxFactory(clientCtx, chainName)
 
-	connectionID := r.config.CosmosChain.SoloMachineLightClient.ConnectionID
-	soloMachineConnectionID := r.soloMachine.ConnectionID()
+	var version *connectiontypes.Version // Can be nil? Not sure.
+	merklePrefix := commitmenttypes.NewMerklePrefix([]byte(ibcexported.StoreKey))
+	initMsg := connectiontypes.NewMsgConnectionOpenInit(
+		clientID,
+		counterpartyClientID,
+		merklePrefix,
+		version,
+		0,
+		clientCtx.From,
+	)
 
-	connection, err := r.cosmosChain.QueryConnection(connectionID)
+	txResp, err := r.sendTx(clientCtx, txf, initMsg)
 	if err != nil {
-		return err
-	}
-	if connection.State == connectiontypes.OPEN {
-		return nil // All good, connection is already open
-	}
-	if connection.State != connectiontypes.INIT {
-		return fmt.Errorf("unexpected connection state: wanted %s, got %s", connectiontypes.INIT, connection.State)
+		return "", err
 	}
 
-	clientState, err := r.cosmosChain.GetClientState(r.config.CosmosChain.SoloMachineLightClient.IBCClientID)
+	connectionID, err := parseConnectionIDFromEvents(txResp.Events)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	sequence := clientState.Sequence
-	tryProof, err := r.soloMachine.GenerateConnOpenTryProof(sequence, r.config.CosmosChain.SoloMachineLightClient.IBCClientID, connectionID)
-	if err != nil {
-		return err
-	}
-	sequence++
+	return connectionID, nil
+}
 
-	tendermintLightClientState, err := r.soloMachine.LightClientState()
-	if err != nil {
-		return err
-	}
+func (r *Relayer) ConnectionOpenAck(
+	chainName string,
+	connectionID string,
+	counterpartyConnectionID string,
+	counterpartyClient ibcexported.ClientState,
+	tryProof []byte,
+	clientProof []byte,
+	consensusProof []byte,
+	consensusHeight clienttypes.Height,
+) error {
+	clientCtx := r.createClientCtx(chainName)
+	txf := r.createTxFactory(clientCtx, chainName)
 
-	clientProof, err := r.soloMachine.GenerateClientStateProof(sequence, tendermintLightClientState)
-	if err != nil {
-		return err
-	}
-	sequence++
+	r.logger.Debug("sending connection open ack",
+		zap.String("connection-id", connectionID),
+		zap.String("counterparty-connection-id", counterpartyConnectionID),
+		zap.String("counterparty-client", counterpartyClient.String()),
+		zap.String("consensus-height", consensusHeight.String()),
+		zap.String("version", connectiontypes.GetCompatibleVersions()[0].String()),
+		zap.String("from", clientCtx.From),
+	)
 
-	consensusProof, err := r.soloMachine.GenerateConsensusStateProof(sequence, tendermintLightClientState)
-	if err != nil {
-		return err
-	}
+	// Just to make sure consensus height is not equal to the current height of the chain
+	time.Sleep(5 * time.Second)
 
-	if err := r.cosmosChain.AckOpenConnection(
+	ackMsg := connectiontypes.NewMsgConnectionOpenAck(
 		connectionID,
-		soloMachineConnectionID,
-		tendermintLightClientState,
+		counterpartyConnectionID,
+		counterpartyClient,
 		tryProof,
 		clientProof,
 		consensusProof,
-		tendermintLightClientState.LatestHeight,
-	); err != nil {
+		clienttypes.ZeroHeight(),
+		consensusHeight,
+		connectiontypes.GetCompatibleVersions()[0],
+		clientCtx.From,
+	)
+
+	_, err := r.sendTx(clientCtx, txf, ackMsg)
+	if err != nil {
 		return err
 	}
-
-	r.logger.Info("Connection handshake completed", zap.String("connection-id", connectionID))
 
 	return nil
 }
