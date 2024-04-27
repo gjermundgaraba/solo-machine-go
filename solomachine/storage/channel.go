@@ -20,7 +20,7 @@ func (cs *ChainStorage) CounterpartyICS20ChannelExists() bool {
 	return cs.counterpartyICS20Channel != ""
 }
 
-func (cs *ChainStorage) ICS20Channel() string {
+func (cs *ChainStorage) ICS20ChannelID() string {
 	return cs.ics20Channel
 }
 

@@ -20,7 +20,7 @@ func (sm *SoloMachine) CreateICS20Channel(chainName string) error {
 	counterpartyClientID := chainStorage.CounterpartyClientID()
 	connectionID := chainStorage.ConnectionID()
 	counterpartyConnectionID := chainStorage.CounterpartyConnectionID()
-	ics20ChannelID := chainStorage.ICS20Channel()
+	ics20ChannelID := chainStorage.ICS20ChannelID()
 	counterpartyICS20ChannelID := chainStorage.CounterpartyICS20Channel()
 
 	if !chainStorage.CounterpartyICS20ChannelExists() {

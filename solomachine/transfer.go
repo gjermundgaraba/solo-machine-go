@@ -21,7 +21,7 @@ func (sm *SoloMachine) Transfer(chainName string, sender string, receiver string
 	// Give some time for stuff to update
 	time.Sleep(5 * time.Second)
 
-	ics20ChannelID := chainStorage.ICS20Channel()
+	ics20ChannelID := chainStorage.ICS20ChannelID()
 	counterpartyICS20ChannelID := chainStorage.CounterpartyICS20Channel()
 
 	lightClientState, err := chainStorage.LightClientState()
