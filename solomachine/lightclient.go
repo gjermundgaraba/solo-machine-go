@@ -19,32 +19,15 @@ func (sm *SoloMachine) LightClientExists(chainName string) bool {
 }
 
 func (sm *SoloMachine) CreateLightClient(chainName string) error {
-	clientState, ibcHeader, err := sm.GetClientInfo(chainName)
-	if err != nil {
-		return err
-	}
-	chainStorage := sm.storage.GetChainStorage(chainName)
-	ctx := sdk.NewContext(sm.storage.GetRootStore(), *ibcHeader.Header, false, sm.sdkLogger)
-
-	sm.logger.Debug("Creating tendermint light client", zap.Int64("height", ibcHeader.SignedHeader.Header.Height))
-
-	if err != nil {
-		return err
-	}
-
-	return chainStorage.CreateLightClient(ctx, clientState, ibcHeader.ConsensusState())
-}
-
-func (sm *SoloMachine) GetClientInfo(chainName string) (*tmclient.ClientState, tmclient.Header, error) {
 	ibcHeader, err := sm.r.GetLatestIBCHeader(chainName)
 	if err != nil {
-		return nil, tmclient.Header{}, err
+		return err
 	}
 
 	revisionNumber := clienttypes.ParseChainID(ibcHeader.Header.ChainID)
 	unbondingPeriod, err := sm.r.GetUnbondingPeriod(chainName)
 	if err != nil {
-		return nil, tmclient.Header{}, err
+		return err
 	}
 
 	clientState := &tmclient.ClientState{
@@ -62,7 +45,16 @@ func (sm *SoloMachine) GetClientInfo(chainName string) (*tmclient.ClientState, t
 		UpgradePath: defaultUpgradePath,
 	}
 
-	return clientState, ibcHeader, nil
+	chainStorage := sm.storage.GetChainStorage(chainName)
+	ctx := sdk.NewContext(sm.storage.GetRootStore(), *ibcHeader.Header, false, sm.sdkLogger)
+
+	sm.logger.Debug("Creating tendermint light client", zap.Int64("height", ibcHeader.SignedHeader.Header.Height))
+
+	if err != nil {
+		return err
+	}
+
+	return chainStorage.CreateLightClient(ctx, clientState, ibcHeader.ConsensusState())
 }
 
 func (sm *SoloMachine) UpdateLightClient(chainName string) error {

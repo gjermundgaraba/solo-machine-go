@@ -116,8 +116,8 @@ func RootCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(keys.Commands())
-	cmd.AddCommand(StartCmd())
 	cmd.AddCommand(InitCmd())
+	cmd.AddCommand(TransferCmd())
 
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
