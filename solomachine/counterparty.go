@@ -50,7 +50,7 @@ func (sm *SoloMachine) UpdateCounterpartyLightClient(chainName string) error {
 		return err
 	}
 
-	sm.logger.Debug("Updated counterparty light client", zap.String("chainName", chainName))
+	sm.logger.Info("Updated counterparty light client", zap.String("chainName", chainName))
 
 	return nil
 }
