@@ -12,7 +12,7 @@ import (
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	gogogrpc "github.com/cosmos/gogoproto/grpc"
-	"github.com/gjermundgaraba/solo-machine-go/utils"
+	"github.com/gjermundgaraba/solo-machine/utils"
 	"go.uber.org/zap"
 	"os"
 	"time"

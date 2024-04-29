@@ -9,7 +9,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/gjermundgaraba/solo-machine-go/utils"
+	"github.com/gjermundgaraba/solo-machine/utils"
 	"go.uber.org/zap"
 )
 

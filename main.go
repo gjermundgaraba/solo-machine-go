@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/gjermundgaraba/solo-machine-go/cmd"
-	"github.com/gjermundgaraba/solo-machine-go/utils"
+	"github.com/gjermundgaraba/solo-machine/cmd"
+	"github.com/gjermundgaraba/solo-machine/utils"
 	"go.uber.org/zap"
 )
 

@@ -2,9 +2,9 @@ package cmd
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/gjermundgaraba/solo-machine-go/relayer"
-	"github.com/gjermundgaraba/solo-machine-go/solomachine"
-	"github.com/gjermundgaraba/solo-machine-go/utils"
+	"github.com/gjermundgaraba/solo-machine/relayer"
+	"github.com/gjermundgaraba/solo-machine/solomachine"
+	"github.com/gjermundgaraba/solo-machine/utils"
 	"github.com/spf13/cobra"
 )
 

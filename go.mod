@@ -1,4 +1,4 @@
-module github.com/gjermundgaraba/solo-machine-go
+module github.com/gjermundgaraba/solo-machine
 
 go 1.22.2
 

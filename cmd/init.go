@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"github.com/gjermundgaraba/solo-machine-go/relayer"
-	"github.com/gjermundgaraba/solo-machine-go/solomachine"
-	"github.com/gjermundgaraba/solo-machine-go/utils"
+	"github.com/gjermundgaraba/solo-machine/relayer"
+	"github.com/gjermundgaraba/solo-machine/solomachine"
+	"github.com/gjermundgaraba/solo-machine/utils"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )

@@ -3,7 +3,7 @@ package relayer
 import (
 	"context"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/gjermundgaraba/solo-machine-go/utils"
+	"github.com/gjermundgaraba/solo-machine/utils"
 	"go.uber.org/zap"
 )
 
